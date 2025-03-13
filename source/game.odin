@@ -33,6 +33,8 @@ import rl "vendor:raylib"
 
 PIXEL_WINDOW_HEIGHT :: 180
 PIXEL_WINDOW_WIDTH :: 320 //Animal Well style
+PLAYER_START_POS_X :: 30
+PLAYER_START_POS_Y :: 30
 
 Game_Memory :: struct {
 	player:      Player,
@@ -45,6 +47,13 @@ Player :: struct {
 	player_pos:     rl.Vector2,
 	player_texture: rl.Texture,
 	player_rect:    rl.Rectangle,
+	isGrounded: bool,
+}
+
+
+Collider :: struct {
+	pos: rl.Vector2,
+	size: rl.Vector2,
 }
 
 g_mem: ^Game_Memory
@@ -66,6 +75,21 @@ ui_camera :: proc() -> rl.Camera2D {
 
 update :: proc() {
 
+	player := &g_mem.player
+
+
+	//Gravity
+		g_mem.player.player_pos.y += rl.GetFrameTime() * 100
+	updatePlayer(player, g_mem)
+	g_mem.some_number += 1
+
+	if rl.IsKeyPressed(.ESCAPE) {
+		g_mem.run = false
+	}
+}
+
+updatePlayer :: proc (player: ^Player, world: ^Game_Memory) {
+
 	input: rl.Vector2
 
 	if rl.IsKeyDown(.UP) || rl.IsKeyDown(.W) {
@@ -82,25 +106,51 @@ update :: proc() {
 	}
 
 	input = linalg.normalize0(input)
-	g_mem.player.player_pos += input * rl.GetFrameTime() * 100
-	//Gravity
-	g_mem.player.player_pos += rl.GetFrameTime() * 100
+	player.player_pos += input * rl.GetFrameTime() * 200
 
-	g_mem.some_number += 1
-
-	if rl.IsKeyPressed(.ESCAPE) {
-		g_mem.run = false
+	for r in world.platforms {
+		platCollider := getCollider(r)
+		playerCollider := getPlayerCollider(player)
+		coll, coll_fix, _ := colliding(playerCollider, platCollider)
+		if coll {
+			if coll_fix.y < 0 {
+				player.player_pos += coll_fix
+				player.isGrounded = true
+			} else {
+				player.player_pos += coll_fix
+			}
+		}
 	}
+}
+getPlayerCollider :: proc (player: ^Player) -> Collider {
+	return Collider {player.player_pos , {20, 24}}
+}
+
+getCollider :: proc (r1: rl.Rectangle) -> Collider {
+	return Collider {{r1.x, r1.y}, {r1.width, r1.height}}
+}
+
+colliding :: proc (c1: Collider, c2: Collider) -> (bool, rl.Vector2, rl.Rectangle) {
+	collRect := rl.GetCollisionRec({c1.pos.x, c1.pos.y, c1.size.x, c1.size.y}, {c2.pos.x, c2.pos.y, c2.size.x, c2.size.y})
+	if collRect.width < collRect.height {
+		onRight := c1.pos.x + c1.size.x / 2 > collRect.x
+		return true, {onRight ? collRect.width : -collRect.width, 0}, collRect
+	}
+	if collRect.width > collRect.height {
+		onTop := c1.pos.y + c1.size.y / 2 > collRect.y
+		return true, {0, onTop ? collRect.height : -collRect.height}, collRect
+	}
+	return false, {}, {}
 }
 
 draw :: proc() {
 	rl.BeginDrawing()
 	rl.ClearBackground(rl.BLACK)
-
 	rl.BeginMode2D(game_camera())
-	rl.DrawTextureEx(g_mem.player.player_texture, g_mem.player.player_pos, 0, 1, rl.WHITE)
-	rl.DrawRectangleV({0, 20}, {320, 10}, rl.BLUE)
 	rl.DrawRectangleV({-30, -20}, {10, 10}, rl.GREEN)
+	rl.DrawRectangleRec(g_mem.platforms[0], rl.BLUE)
+	rl.DrawRectangleRec({g_mem.player.player_pos.x, g_mem.player.player_pos.y, 20, 24}, rl.GREEN)
+	rl.DrawTextureEx(g_mem.player.player_texture, g_mem.player.player_pos, 0, 1, rl.WHITE)
 	rl.EndMode2D()
 
 	rl.BeginMode2D(ui_camera())
@@ -150,12 +200,16 @@ game_init :: proc() {
 
 		// You can put textures, sounds and music in the `assets` folder. Those
 		// files will be part any release or web build.
-		player = {player_texture = rl.LoadTexture("assets/round_cat.png"), player_pos = {30, 30}, player_rect = rl.Rectangle{player_pos.x, player_pos.y, 30, 30},
+		player = {
+			player_texture = rl.LoadTexture("assets/round_cat.png"),
+			player_pos = {PLAYER_START_POS_X, PLAYER_START_POS_Y},
+			player_rect = rl.Rectangle{PLAYER_START_POS_X, PLAYER_START_POS_Y, 30, 30}},
 		platforms = new([30]rl.Rectangle)^,
 	}
 
 	//setup some platforms.
 	platform1 := rl.Rectangle {
+		y = 70,
 		width  = PIXEL_WINDOW_WIDTH,
 		height = 10,
 	}
