@@ -32,12 +32,19 @@ import "core:math/linalg"
 import rl "vendor:raylib"
 
 PIXEL_WINDOW_HEIGHT :: 180
+PIXEL_WINDOW_WIDTH :: 320 //Animal Well style
 
 Game_Memory :: struct {
-	player_pos: rl.Vector2,
-	player_texture: rl.Texture,
+	player:      Player,
 	some_number: int,
-	run: bool,
+	run:         bool,
+	platforms:   [30]rl.Rectangle,
+}
+
+Player :: struct {
+	player_pos:     rl.Vector2,
+	player_texture: rl.Texture,
+	player_rect:    rl.Rectangle,
 }
 
 g_mem: ^Game_Memory
@@ -47,19 +54,18 @@ game_camera :: proc() -> rl.Camera2D {
 	h := f32(rl.GetScreenHeight())
 
 	return {
-		zoom = h/PIXEL_WINDOW_HEIGHT,
-		target = g_mem.player_pos,
-		offset = { w/2, h/2 },
+		zoom = h / PIXEL_WINDOW_HEIGHT,
+		target = g_mem.player.player_pos,
+		offset = {w / 2, h / 2},
 	}
 }
 
 ui_camera :: proc() -> rl.Camera2D {
-	return {
-		zoom = f32(rl.GetScreenHeight())/PIXEL_WINDOW_HEIGHT,
-	}
+	return {zoom = f32(rl.GetScreenHeight()) / PIXEL_WINDOW_HEIGHT}
 }
 
 update :: proc() {
+
 	input: rl.Vector2
 
 	if rl.IsKeyDown(.UP) || rl.IsKeyDown(.W) {
@@ -76,7 +82,10 @@ update :: proc() {
 	}
 
 	input = linalg.normalize0(input)
-	g_mem.player_pos += input * rl.GetFrameTime() * 100
+	g_mem.player.player_pos += input * rl.GetFrameTime() * 100
+	//Gravity
+	g_mem.player.player_pos += rl.GetFrameTime() * 100
+
 	g_mem.some_number += 1
 
 	if rl.IsKeyPressed(.ESCAPE) {
@@ -89,8 +98,8 @@ draw :: proc() {
 	rl.ClearBackground(rl.BLACK)
 
 	rl.BeginMode2D(game_camera())
-	rl.DrawTextureEx(g_mem.player_texture, g_mem.player_pos, 0, 1, rl.WHITE)
-	rl.DrawRectangleV({20, 20}, {10, 10}, rl.RED)
+	rl.DrawTextureEx(g_mem.player.player_texture, g_mem.player.player_pos, 0, 1, rl.WHITE)
+	rl.DrawRectangleV({0, 20}, {320, 10}, rl.BLUE)
 	rl.DrawRectangleV({-30, -20}, {10, 10}, rl.GREEN)
 	rl.EndMode2D()
 
@@ -99,7 +108,17 @@ draw :: proc() {
 	// NOTE: `fmt.ctprintf` uses the temp allocator. The temp allocator is
 	// cleared at the end of the frame by the main application, meaning inside
 	// `main_hot_reload.odin`, `main_release.odin` or `main_web_entry.odin`.
-	rl.DrawText(fmt.ctprintf("some_number: %v\nplayer_pos: %v", g_mem.some_number, g_mem.player_pos), 5, 5, 8, rl.WHITE)
+	rl.DrawText(
+		fmt.ctprintf(
+			"some_number: %v\nplayer_pos: %v",
+			g_mem.some_number,
+			g_mem.player.player_pos,
+		),
+		5,
+		5,
+		8,
+		rl.WHITE,
+	)
 
 	rl.EndMode2D()
 
@@ -131,8 +150,16 @@ game_init :: proc() {
 
 		// You can put textures, sounds and music in the `assets` folder. Those
 		// files will be part any release or web build.
-		player_texture = rl.LoadTexture("assets/round_cat.png"),
+		player = {player_texture = rl.LoadTexture("assets/round_cat.png"), player_pos = {30, 30}, player_rect = rl.Rectangle{player_pos.x, player_pos.y, 30, 30},
+		platforms = new([30]rl.Rectangle)^,
 	}
+
+	//setup some platforms.
+	platform1 := rl.Rectangle {
+		width  = PIXEL_WINDOW_WIDTH,
+		height = 10,
+	}
+	g_mem.platforms[0] = platform1
 
 	game_hot_reloaded(g_mem)
 }
